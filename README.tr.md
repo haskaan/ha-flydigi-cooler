@@ -66,6 +66,8 @@
 5. İndirdiğiniz dosyaları oluşturduğunuz klasöre kopyalayın.
 6. Home Assistant'ı yeniden başlatın.
 
+## Yapılandırma
+
 ### Cihazı ekleme
 
 **Ayarlar → Cihazlar ve Hizmetler → Entegrasyon Ekle → Flydigi Cooler.**

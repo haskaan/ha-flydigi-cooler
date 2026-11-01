@@ -64,6 +64,8 @@ Use this if **Flydigi Cooler** does not show up in the HACS search.
 5. Place the downloaded files in the folder you created.
 6. Restart Home Assistant.
 
+## Configuration
+
 ### Adding the device
 
 **Settings → Devices & Services → Add Integration → Flydigi Cooler.**
