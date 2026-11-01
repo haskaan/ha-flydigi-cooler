@@ -1,0 +1,58 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "bluetooth_confirm": {
+        "title": "Flydigi soğutucu bulundu",
+        "description": "**{name}** eklensin mi?"
+      },
+      "user": {
+        "title": "Flydigi soğutucu ekle",
+        "description": "Keşfedilen bir Flydigi soğutucu seçin veya Bluetooth adresini girin. Home Assistant'ın şu an gördüğü cihazlar:\n{found}",
+        "data": {
+          "address": "Cihaz veya Bluetooth adresi"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Soğutucuya ulaşılamadı. Açık olduğundan emin olun."
+    },
+    "abort": {
+      "already_configured": "Bu soğutucu zaten eklenmiş.",
+      "cannot_connect": "Soğutucuya ulaşılamadı. Açık olduğundan emin olun."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "current_rpm": { "name": "Anlık devir" },
+      "target_rpm": { "name": "Hedef devir" },
+      "mode": {
+        "name": "Kontrol modu",
+        "state": { "gear": "Sabit kademe", "realtime": "Gerçek zamanlı" }
+      },
+      "gear": { "name": "Seçili kademe" },
+      "firmware": { "name": "Yazılım sürümü" }
+    },
+    "light": {
+      "light": { "name": "Işık" }
+    },
+    "number": {
+      "light_speed": { "name": "Işık hızı" }
+    },
+    "select": {
+      "level": { "name": "Seviye" },
+      "smart_stop": {
+        "name": "Akıllı durma",
+        "state": {
+          "off": "Kapalı",
+          "immediate": "Anında",
+          "delayed": "Gecikmeli"
+        }
+      }
+    },
+    "switch": {
+      "gear_light": { "name": "Kademe ışığı" },
+      "power_on_start": { "name": "Güçte otomatik başlat" }
+    }
+  }
+}

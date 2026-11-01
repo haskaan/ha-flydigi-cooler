@@ -1,0 +1,58 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "bluetooth_confirm": {
+        "title": "Flydigi cooler found",
+        "description": "Do you want to add **{name}**?"
+      },
+      "user": {
+        "title": "Add Flydigi cooler",
+        "description": "Select a discovered Flydigi cooler or enter its Bluetooth address. Devices currently seen by Home Assistant:\n{found}",
+        "data": {
+          "address": "Device or Bluetooth address"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not reach the cooler. Make sure it is powered on."
+    },
+    "abort": {
+      "already_configured": "This cooler is already configured.",
+      "cannot_connect": "Could not reach the cooler. Make sure it is powered on."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "current_rpm": { "name": "Current RPM" },
+      "target_rpm": { "name": "Target RPM" },
+      "mode": {
+        "name": "Control mode",
+        "state": { "gear": "Fixed gear", "realtime": "Realtime" }
+      },
+      "gear": { "name": "Selected gear" },
+      "firmware": { "name": "Firmware" }
+    },
+    "light": {
+      "light": { "name": "Light" }
+    },
+    "number": {
+      "light_speed": { "name": "Light speed" }
+    },
+    "select": {
+      "level": { "name": "Level" },
+      "smart_stop": {
+        "name": "Smart stop",
+        "state": {
+          "off": "Turn off",
+          "immediate": "Immediate",
+          "delayed": "Delayed"
+        }
+      }
+    },
+    "switch": {
+      "gear_light": { "name": "Gear light" },
+      "power_on_start": { "name": "Power-on auto start" }
+    }
+  }
+}

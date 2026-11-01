@@ -1,0 +1,22 @@
+{
+  "domain": "flydigi_cooler",
+  "name": "Flydigi Cooler",
+  "bluetooth": [
+    { "local_name": "FlyDigi BS3PRO" },
+    { "local_name": "FlyDigi BS3 Pro" },
+    { "local_name": "FlyDigi BS3" },
+    { "local_name": "FlyDigi BS2PRO" },
+    { "local_name": "FlyDigi BS2 Pro" },
+    { "local_name": "FlyDigi BS2" },
+    { "service_uuid": "0000fff0-0000-1000-8000-00805f9b34fb" }
+  ],
+  "codeowners": ["@haskaan"],
+  "config_flow": true,
+  "dependencies": ["bluetooth"],
+  "documentation": "https://github.com/haskaan/ha-flydigi-cooler",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/haskaan/ha-flydigi-cooler/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}
