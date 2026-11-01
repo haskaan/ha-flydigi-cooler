@@ -41,16 +41,21 @@
 ### Option 1. Using HACS (recommended)
 
 1. Install [HACS](https://hacs.xyz) if you have not already.
+2. Open HACS → Integrations.
+3. Search for **Flydigi Cooler** and install it.
+4. Restart Home Assistant.
+
+### Option 2. Using HACS as a custom repository
+
+Use this if **Flydigi Cooler** does not show up in the HACS search.
+
+1. Install [HACS](https://hacs.xyz) if you have not already.
 2. Open HACS → Integrations → ⋮ → **Custom repositories**.
 3. Add `https://github.com/haskaan/ha-flydigi-cooler` with category **Integration**.
 4. Search for **Flydigi Cooler** on the HACS integration page and install it.
 5. Restart Home Assistant.
 
-> Flydigi Cooler is not part of the HACS default repository yet, so step 3 is
-> required. Once the repository is accepted into the default list, that step
-> goes away and a plain search is enough.
-
-### Option 2. Manually
+### Option 3. Manually
 
 1. Open the directory for your HA configuration (where `configuration.yaml` lives).
 2. If there is no `custom_components` directory, create it.

@@ -42,17 +42,22 @@
 ### Seçenek 1. HACS ile (önerilen)
 
 1. HACS kurulu değilse [HACS](https://hacs.xyz) kurun.
+2. HACS → Entegrasyonlar.
+3. **Flydigi Cooler** araması yapıp kurun.
+4. Home Assistant'ı yeniden başlatın.
+
+### Seçenek 2. HACS'e özel depo olarak ekleyerek
+
+**Flydigi Cooler** HACS aramasında görünmüyorsa bu yolu kullanın.
+
+1. HACS kurulu değilse [HACS](https://hacs.xyz) kurun.
 2. HACS → Entegrasyonlar → ⋮ → **Özel depolar**.
 3. `https://github.com/haskaan/ha-flydigi-cooler` adresini **Integration**
    kategorisiyle ekleyin.
 4. HACS entegrasyon sayfasında **Flydigi Cooler** araması yapıp kurun.
 5. Home Assistant'ı yeniden başlatın.
 
-> Flydigi Cooler henüz HACS varsayılan deposunda değil, bu yüzden 3. adım
-> gerekiyor. Depo varsayılan listeye kabul edildiğinde bu adım kalkar ve
-> doğrudan arama yeterli olur.
-
-### Seçenek 2. Elle
+### Seçenek 3. Elle
 
 1. HA yapılandırma dizinini açın (`configuration.yaml` dosyasının bulunduğu dizin).
 2. `custom_components` dizini yoksa oluşturun.
