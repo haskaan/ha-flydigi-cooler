@@ -340,6 +340,20 @@ async def test_set_light_colors_while_on_uploads_once() -> None:
     await coordinator.async_set_light_colors([(1, 2, 3)])
     assert coordinator.client.sent == [], "same colours must not re-upload"
 
+async def test_overclock_3_not_clamped_to_gear_table() -> None:
+    """Gear 4 at 3700 must not turn Overclock 3 (4000 RPM) into Overclock 2."""
+    hass = FakeHass()
+    coordinator = await _restart(hass, {"last_on": {"mode": "gear", "gear": 1}})
+    coordinator.client.state.gear_rpm = {1: 1300, 2: 2700, 3: 3000, 4: 3700}
+    await coordinator.async_set_mode("Overclock")
+    coordinator.client.sent.clear()
+    await coordinator.async_set_level(3)
+    await hass.settle()
+    rpm_frames = [f for f in coordinator.client.sent if f[2] == 0x21]
+    assert rpm_frames, "a realtime RPM frame is sent"
+    assert rpm_frames[-1][4] | (rpm_frames[-1][5] << 8) == 4000
+    assert coordinator.active_level == 3
+
 
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):

@@ -49,10 +49,22 @@ from .protocol import (
     cmd_set_rpm,
     cmd_set_smart_start_stop,
     cmd_set_power_on_start,
+    DEFAULT_MAX_RPM,
     MIN_RPM,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _rpm_limit(state) -> int:
+    """Upper bound for realtime targets.
+
+    The fixed gear table can top out below the mode table (e.g. gear 4 at
+    3700 RPM while Overclock 3 is 4000). Clamping to the gear table would
+    silently turn Overclock 3 into Overclock 2, so realtime targets may go up
+    to the hardware maximum as well.
+    """
+    return max(state.max_rpm, DEFAULT_MAX_RPM)
 
 
 def _parse_colors(value: object) -> list[tuple[int, int, int]]:
@@ -524,7 +536,7 @@ class FlydigiCoordinator(DataUpdateCoordinator[DeviceState]):
         if rpm <= 0:
             return
         await self.client.async_send(cmd_enter_realtime(), {CMD_ENTER_REALTIME_RPM})
-        await self.client.async_send(cmd_set_rpm(rpm, state.max_rpm), {CMD_SET_REALTIME_RPM})
+        await self.client.async_send(cmd_set_rpm(rpm, _rpm_limit(state)), {CMD_SET_REALTIME_RPM})
         state.realtime = True
         state.target_rpm = rpm
         self._last_keepalive_at = time.monotonic()
@@ -565,7 +577,7 @@ class FlydigiCoordinator(DataUpdateCoordinator[DeviceState]):
         """Switch to realtime mode and set an exact target RPM."""
         state = self.client.state
         await self.client.async_send(cmd_enter_realtime(), {CMD_ENTER_REALTIME_RPM})
-        await self.client.async_send(cmd_set_rpm(rpm, state.max_rpm), {CMD_SET_REALTIME_RPM})
+        await self.client.async_send(cmd_set_rpm(rpm, _rpm_limit(state)), {CMD_SET_REALTIME_RPM})
         state.realtime = True
         state.target_rpm = rpm
         if rpm <= 0:
