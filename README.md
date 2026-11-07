@@ -171,24 +171,41 @@ On/off uses `0x46` (the only command that enables/disables the LED output;
 **program** (`0x41` init → 19 × `0x47` frames → `0x43` commit); the firmware
 interpolates between frames.
 
-| Effect | Behaviour |
-| --- | --- |
-| Static | Single colour, steady |
-| Multi color | Red / green / blue, steady |
-| Rotation | Single dot rotating in the selected colour |
-| Flowing | Six-colour rainbow flow |
-| Breathing | Breathing in the selected colour |
+| Effect | Colours | Behaviour |
+| --- | --- | --- |
+| Static | 1 | Single colour, steady |
+| Multi color | 3 | Three colours repeated along the strip, steady |
+| Rotation | 1–6 | The colours rotate along the strip |
+| Flowing | – | Six-colour rainbow flow (fixed palette) |
+| Breathing | 1–5 | Breathes through the colours in order |
+
+The effects share one colour list (default blue, red, green). The light's colour picker changes the first colour; set the whole list
+with the `flydigi_cooler.set_light_colors` action. Each effect uses as many
+colours as it supports and fills missing ones with the defaults. The current
+list is shown in the light's `colors` attribute.
+
+```yaml
+action: flydigi_cooler.set_light_colors
+target:
+  entity_id: light.<device>_light
+data:
+  colors:
+    - [0, 0, 255]
+    - [255, 0, 0]
+    - [0, 255, 0]
+```
 
 Brightness is applied by the firmware (0–100). The `0x43` commit erases one
-flash page on every effect change. Effect, colour and brightness are stored in
-`.storage`. The uploaded program lives in RAM and is lost when the device loses
+flash page on every effect change. Effect, colours and brightness are stored in
+`.storage` (default brightness 50). The uploaded program lives in RAM and is lost when the device loses
 power with the PC; turning the light on again re-uploads the remembered effect.
 If the light is already on and nothing changed, no command is sent. The light is
 independent of the fan: turning the fan on or off does not change it.
 
 Animation speed is set with `number.<device>_light_speed` (0–100; 100 = fast,
-0 = slow, the same scale as "Speed" in the official app). Changing the speed
-re-uploads the effect at the new speed.
+0 = slow, default 60). It applies to Rotation, Flowing
+and Breathing; the static effects do not animate. Changing the speed re-uploads
+the effect at the new speed.
 
 ## Device settings (flash)
 
@@ -231,7 +248,8 @@ The device also generates a **random static BLE address** on some boots
 (observed: `DD:7F:64:2D:BA:83` → `DE:7F:64:2D:BA:83`). The integration
 therefore does not rely on a fixed address: it first looks for the advertised
 name (`FlyDigi BS3PRO`) or the `FFF0` service, and only then falls back to the
-stored address. No extra steps are needed when the address changes.
+stored address. Normally no extra steps are needed when the address changes
+(unless the cooler asks for Bluetooth pairing, see below).
 
 On every successful connection the address is written to
 `.storage/flydigi_cooler.<entry_id>` and tried **first** after a restart. This
@@ -239,6 +257,55 @@ matters because the device does not advertise its name/`FFF0` during normal
 operation (`advertised=[]` in the logs); the name only appears in pairing mode.
 If the address changes anyway, hold the power button for 10 s to enter pairing
 mode; HA finds the device by name and stores the new address itself.
+
+After the 10 s hold the cooler can stay **switched off**: Bluetooth keeps
+working and commands are accepted, but the fan and LEDs do nothing (current RPM
+stays 0). A short press on the power button turns it back on.
+
+### When the cooler asks for Bluetooth pairing
+
+After the cooler has been paired with another host (e.g. the official Windows
+app), it can start asking for Bluetooth pairing (bonding) on every connection.
+Windows accepts this silently; Home Assistant has no pairing agent for it, so
+BlueZ refuses and the cooler drops the link. Symptoms:
+
+- Adding the device fails with "cannot connect", or it connects but nothing is
+  read.
+- The integration log shows `failed to discover services, device disconnected`,
+  `Characteristic 0000fff1-… was not found` or `Authentication Failed`.
+- The host log (`ha host logs`) shows
+  `bluetoothd: new_auth() No agent available for request type 2`.
+
+Pair the cooler once from the Home Assistant host (SSH add-on) with
+`bluetoothctl`, using an agent that accepts the request automatically:
+
+1. Close the official app and stop its background service on the PC
+   (on Windows: `Flydigi Space Station Service`), so nothing else is connected.
+2. Put the cooler in pairing mode (hold the power button for 10 s) and note
+   its current address in the Bluetooth advertisement monitor.
+3. Run, replacing `XX:XX:XX:XX:XX:XX` with that address:
+
+   ```bash
+   bluetoothctl
+   pairable on
+   agent NoInputNoOutput
+   default-agent
+   scan le
+   pair XX:XX:XX:XX:XX:XX
+   trust XX:XX:XX:XX:XX:XX
+   scan off
+   pairable off
+   quit
+   ```
+
+   If the cooler starts the pairing itself, `pair` reports `AlreadyExists`;
+   that is fine. `info XX:XX:XX:XX:XX:XX` should then show `Paired: yes`,
+   `Bonded: yes` and the `FFF0` service.
+4. Short-press the power button to switch the cooler on, then add the
+   integration with the same address (type it in if it is not listed).
+
+The bond is stored for that address. If the cooler later comes back with a new
+address, repeat the pairing for the new one.
 
 ## Protocol (for tinkerers)
 
@@ -312,6 +379,8 @@ Overclock and percentage speed do not drift.
 | Device not discovered | Hold the power button 10 s to enter pairing mode; make sure no other host is connected |
 | `Connection Failed to be Established` | The device is still paired to another host — erase pairing (10 s hold) |
 | Fan turns itself back on | Update to the latest version; off state now forces target RPM 0 |
+| Connects, but `No agent available` / `Authentication Failed` in the logs | The cooler wants Bluetooth pairing — see "When the cooler asks for Bluetooth pairing" |
+| Commands accepted but fan and LEDs do nothing | The cooler is switched off (e.g. after the 10 s hold) — short-press the power button |
 | Mode/level drifts back after ~2 min | Keep the integration running — it refreshes the target RPM every 60 s |
 
 ## Credits

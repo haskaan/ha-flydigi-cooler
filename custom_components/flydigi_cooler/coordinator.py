@@ -16,8 +16,10 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .const import CONF_ADDRESS, DEFAULT_SCAN_INTERVAL, DOMAIN
 from .flydigi_client import FlydigiClient, FlydigiConnectionError
 from .light_program import (
-    DEFAULT_COLOR,
+    DEFAULT_COLORS,
+    DEFAULT_SPEED,
     EFFECT_STATIC,
+    MAX_COLORS,
     EFFECTS,
     build_program,
     speed_ticks,
@@ -51,6 +53,21 @@ from .protocol import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _parse_colors(value: object) -> list[tuple[int, int, int]]:
+    """Validate a stored colour list; return [] when it is unusable."""
+    if not isinstance(value, (list, tuple)):
+        return []
+    colors: list[tuple[int, int, int]] = []
+    for color in value[:MAX_COLORS]:
+        if not isinstance(color, (list, tuple)) or len(color) != 3:
+            return []
+        try:
+            colors.append(tuple(max(0, min(255, int(c))) for c in color))
+        except (TypeError, ValueError):
+            return []
+    return colors
 
 # The device pushes a 0xEF status frame about once per second. Forward those
 # to the entities, but not more often than this (seconds) to keep recorder and
@@ -96,10 +113,12 @@ class FlydigiCoordinator(DataUpdateCoordinator[DeviceState]):
         self._light_on = True
         self._light_known = False
         self._light_effect = EFFECT_STATIC
-        self._light_brightness = 100
-        self._light_color: tuple[int, int, int] = DEFAULT_COLOR
-        # Animation speed 0..100 (100 = fastest), same scale as the vendor app.
-        self._light_speed = 50
+        self._light_brightness = 50
+        # Colour list shared by the effects (1..6 colours, the first one is
+        # the light's colour picker).
+        self._light_colors: list[tuple[int, int, int]] = list(DEFAULT_COLORS)
+        # Animation speed 0..100 (100 = fastest).
+        self._light_speed = DEFAULT_SPEED
         # Settings the cooler keeps in its own flash (0x0D smart start/stop,
         # 0x0C power-on start, 0x48 gear light). A write erases a flash page,
         # so commands are only sent when the user changes a value -- never on
@@ -179,14 +198,14 @@ class FlydigiCoordinator(DataUpdateCoordinator[DeviceState]):
         brightness = data.get("light_brightness")
         if isinstance(brightness, int) and 0 <= brightness <= 100:
             self._light_brightness = brightness
-        color = data.get("light_color")
-        if isinstance(color, (list, tuple)) and len(color) == 3:
-            try:
-                self._light_color = tuple(
-                    max(0, min(255, int(channel))) for channel in color
-                )
-            except (TypeError, ValueError):
-                pass
+        colors = _parse_colors(data.get("light_colors"))
+        if colors:
+            self._light_colors = colors
+        else:
+            # Older versions stored a single colour: keep it as the first one.
+            single = _parse_colors([data.get("light_color")])
+            if single:
+                self._light_colors = single + list(DEFAULT_COLORS[1:])
         speed = data.get("light_speed")
         if isinstance(speed, int) and 0 <= speed <= 100:
             self._light_speed = speed
@@ -213,7 +232,7 @@ class FlydigiCoordinator(DataUpdateCoordinator[DeviceState]):
                     "light_on": self._light_on,
                     "light_effect": self._light_effect,
                     "light_brightness": self._light_brightness,
-                    "light_color": list(self._light_color),
+                    "light_colors": [list(color) for color in self._light_colors],
                     "light_speed": self._light_speed,
                     "smart_stop": self._smart_stop,
                     "gear_light": self._gear_light,
@@ -321,9 +340,14 @@ class FlydigiCoordinator(DataUpdateCoordinator[DeviceState]):
         return self._light_brightness
 
     @property
+    def light_colors(self) -> list[tuple[int, int, int]]:
+        """Colour list used by the effects (1..6 colours)."""
+        return list(self._light_colors)
+
+    @property
     def light_color(self) -> tuple[int, int, int]:
-        """Base RGB colour used by the single-colour effects."""
-        return self._light_color
+        """First colour of the list (the light entity's colour picker)."""
+        return self._light_colors[0]
 
     @property
     def light_speed(self) -> int:
@@ -649,8 +673,12 @@ class FlydigiCoordinator(DataUpdateCoordinator[DeviceState]):
         brightness: int | None = None,
         rgb: tuple[int, int, int] | None = None,
         effect: str | None = None,
+        colors: list[tuple[int, int, int]] | None = None,
     ) -> None:
         """Turn the LED output on/off and optionally change its effect.
+
+        ``rgb`` replaces the first colour of the list, ``colors`` the whole
+        list (1..6 colours).
 
         ``0x46`` is the actual switch (``0x44`` only selects an animation).
         Custom effects are uploaded as a program: ``0x41`` init, 19 x ``0x47``
@@ -667,16 +695,26 @@ class FlydigiCoordinator(DataUpdateCoordinator[DeviceState]):
             self.async_set_updated_data(self.client.state)
             return
 
-        brightness = 100 if brightness is None else max(1, min(100, brightness))
-        color = tuple(rgb) if rgb is not None else self._light_color
+        brightness = (
+            self._light_brightness
+            if brightness is None
+            else max(1, min(100, brightness))
+        )
+        new_colors = (
+            _parse_colors(colors) if colors is not None else list(self._light_colors)
+        )
+        if not new_colors:
+            raise ValueError("colors must be a list of 1..6 [r, g, b] values")
+        if rgb is not None:
+            new_colors[0] = tuple(max(0, min(255, int(c))) for c in rgb)
         effect = effect or self._light_effect
         if effect not in EFFECTS:
             raise ValueError(f"unknown light effect: {effect}")
 
-        same = (effect, brightness, color) == (
+        same = (effect, brightness, new_colors) == (
             self._light_effect,
             self._light_brightness,
-            self._light_color,
+            self._light_colors,
         )
         if same and self._light_known and self._light_on:
             return
@@ -685,17 +723,17 @@ class FlydigiCoordinator(DataUpdateCoordinator[DeviceState]):
         # enabling the output alone would show the factory animation instead of
         # the remembered effect.
 
-        await self._async_apply_light(effect, brightness, color)
+        await self._async_apply_light(effect, brightness, new_colors)
         self._light_on = True
         self._light_known = True
         self._light_effect = effect
         self._light_brightness = brightness
-        self._light_color = color
+        self._light_colors = new_colors
         self._save_store()
         self.async_set_updated_data(self.client.state)
 
     async def _async_apply_light(
-        self, effect: str, brightness: int, color: tuple[int, int, int]
+        self, effect: str, brightness: int, colors: list[tuple[int, int, int]]
     ) -> None:
         """Upload and commit one complete light program."""
         frames: list[tuple[bytes, tuple[int, ...]]] = []
@@ -705,7 +743,7 @@ class FlydigiCoordinator(DataUpdateCoordinator[DeviceState]):
         for index, chunk in enumerate(
             split_frames(
                 build_program(
-                    effect, brightness, color, speed_ticks(self._light_speed)
+                    effect, brightness, colors, speed_ticks(self._light_speed)
                 )
             )
         ):
@@ -716,6 +754,20 @@ class FlydigiCoordinator(DataUpdateCoordinator[DeviceState]):
         frames.append((cmd_rgb_commit(), (CMD_RGB_COMMIT,)))
         await self.client.async_send_sequence(frames)
 
+    async def async_set_light_colors(self, colors: list[tuple[int, int, int]]) -> None:
+        """Replace the colour list; re-uploads the effect only while the light is on."""
+        new_colors = _parse_colors(colors)
+        if not new_colors:
+            raise ValueError("colors must be a list of 1..6 [r, g, b] values")
+        if self._light_known and self._light_on:
+            await self.async_set_light(True, colors=new_colors)
+            return
+        if new_colors == self._light_colors:
+            return
+        self._light_colors = new_colors
+        self._save_store()
+        self.async_set_updated_data(self.client.state)
+
     async def async_set_light_speed(self, speed: int) -> None:
         """Change the animation speed; re-uploads the current program."""
         speed = max(0, min(100, int(speed)))
@@ -725,7 +777,7 @@ class FlydigiCoordinator(DataUpdateCoordinator[DeviceState]):
         self._save_store()
         if self._light_known and self._light_on:
             await self._async_apply_light(
-                self._light_effect, self._light_brightness, self._light_color
+                self._light_effect, self._light_brightness, self._light_colors
             )
         self.async_set_updated_data(self.client.state)
 

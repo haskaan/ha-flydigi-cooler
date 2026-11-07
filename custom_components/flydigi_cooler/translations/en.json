@@ -54,5 +54,17 @@
       "gear_light": { "name": "Gear light" },
       "power_on_start": { "name": "Power-on auto start" }
     }
+  },
+  "services": {
+    "set_light_colors": {
+      "name": "Set light colors",
+      "description": "Sets the colour list used by the light effects: Static uses the first colour, Multi color the first three, Rotation up to six, Breathing up to five. Flowing has a fixed palette.",
+      "fields": {
+        "colors": {
+          "name": "Colors",
+          "description": "1 to 6 colours as [r, g, b] lists, e.g. [[0, 0, 255], [255, 0, 0], [0, 255, 0]]."
+        }
+      }
+    }
   }
 }

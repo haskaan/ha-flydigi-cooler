@@ -143,7 +143,7 @@ class FlydigiConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def _async_probe(self) -> bool:
         assert self._address is not None
-        client = FlydigiClient(self.hass, self._address)
+        client = FlydigiClient(self.hass, self._address, strict=True)
         try:
             state = await client.async_update()
             _LOGGER.debug("probe ok: %s", state)

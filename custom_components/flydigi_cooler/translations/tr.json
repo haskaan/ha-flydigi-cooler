@@ -54,5 +54,17 @@
       "gear_light": { "name": "Kademe ışığı" },
       "power_on_start": { "name": "Güçte otomatik başlat" }
     }
+  },
+  "services": {
+    "set_light_colors": {
+      "name": "Işık renklerini ayarla",
+      "description": "Işık efektlerinin kullandığı renk listesini ayarlar: Static ilk rengi, Multi color ilk üç rengi, Rotation en fazla altı, Breathing en fazla beş rengi kullanır. Flowing'in paleti sabittir.",
+      "fields": {
+        "colors": {
+          "name": "Renkler",
+          "description": "[r, g, b] listesi olarak 1-6 renk, örn. [[0, 0, 255], [255, 0, 0], [0, 255, 0]]."
+        }
+      }
+    }
   }
 }

@@ -57,9 +57,13 @@ class FlydigiConnectionError(FlydigiError):
 class FlydigiClient:
     """Owns one BLE link and keeps the latest :class:`DeviceState`."""
 
-    def __init__(self, hass: HomeAssistant, address: str) -> None:
+    def __init__(
+        self, hass: HomeAssistant, address: str, *, strict: bool = False
+    ) -> None:
         self.hass = hass
         self.address = address.upper()
+        # Only ever connect to ``address`` (used when the user picked one).
+        self._strict = strict
         self.state = DeviceState()
         self._client: BleakClient | None = None
         self._stream = FrameStream()
@@ -198,6 +202,17 @@ class FlydigiClient:
                 async_ble_device_from_address(self.hass, self._known, connectable=True)
             )
 
+        # The configured address comes before other advertisers: HA keeps old
+        # addresses of this cooler in its cache for a while and each of them
+        # costs a full connect timeout.
+        add(
+            async_ble_device_from_address(self.hass, self.address, connectable=True)
+        )
+        if self._strict:
+            candidates = [found[address] for address in order]
+            _LOGGER.debug("strict candidates=%s", [d.address for d in candidates])
+            return candidates
+
         advertised = []
         discovered = async_discovered_service_info(self.hass, connectable=True)
         for info in discovered:
@@ -215,10 +230,6 @@ class FlydigiClient:
         )
         for info in advertised:
             add(info.device)
-
-        add(
-            async_ble_device_from_address(self.hass, self.address, connectable=True)
-        )
 
         _LOGGER.debug(
             "discovered=%d advertised=%s stored=%s known=%s",
@@ -243,21 +254,16 @@ class FlydigiClient:
 
         last_error = "connection failed"
         for ble_device in candidates:
-            client = BleakClient(
-                ble_device,
-                timeout=CONNECT_TIMEOUT,
-                disconnected_callback=self._on_disconnect,
-            )
-            try:
-                await client.connect()
-                await client.start_notify(CHAR_NOTIFY, self._on_notify)
-            except (BleakError, TimeoutError, OSError) as err:
-                last_error = str(err) or err.__class__.__name__
-                _LOGGER.debug("connect to %s failed: %s", ble_device.address, last_error)
-                try:
-                    await client.disconnect()
-                except Exception:  # noqa: BLE001 - best effort
-                    pass
+            client, error = await self._async_open(ble_device, pair=False)
+            if client is None and not isinstance(error, TimeoutError):
+                # Some units ask the central to pair (bond) on every link. HA
+                # has no pairing agent for device-initiated requests, so BlueZ
+                # refuses and the cooler drops the link. Pairing that we start
+                # ourselves is accepted as "just works"; retry once with it.
+                _LOGGER.debug("retrying %s with pairing", ble_device.address)
+                client, error = await self._async_open(ble_device, pair=True)
+            if client is None:
+                last_error = str(error) or error.__class__.__name__
                 continue
 
             self._last_good = ble_device.address.upper()
@@ -273,6 +279,44 @@ class FlydigiClient:
             return
 
         raise FlydigiConnectionError(last_error)
+
+    async def _async_open(
+        self, ble_device, *, pair: bool
+    ) -> tuple[BleakClient | None, BaseException | None]:
+        """Connect and subscribe; return the client or the error."""
+        kwargs = {"pair": True} if pair else {}
+        try:
+            client = BleakClient(
+                ble_device,
+                timeout=CONNECT_TIMEOUT,
+                disconnected_callback=self._on_disconnect,
+                **kwargs,
+            )
+        except TypeError:
+            # Older bleak without the ``pair`` argument: pair after connecting.
+            client = BleakClient(
+                ble_device,
+                timeout=CONNECT_TIMEOUT,
+                disconnected_callback=self._on_disconnect,
+            )
+        try:
+            await client.connect()
+            if pair and not kwargs.get("pair"):
+                await client.pair()
+            await client.start_notify(CHAR_NOTIFY, self._on_notify)
+        except (BleakError, TimeoutError, OSError) as err:
+            _LOGGER.debug(
+                "connect to %s failed%s: %s",
+                ble_device.address,
+                " (pairing)" if pair else "",
+                str(err) or err.__class__.__name__,
+            )
+            try:
+                await client.disconnect()
+            except Exception:  # noqa: BLE001 - best effort
+                pass
+            return None, err
+        return client, None
 
     def _on_notify(self, _sender: object, data: bytearray) -> None:
         for frame in self._stream.feed(bytes(data)):

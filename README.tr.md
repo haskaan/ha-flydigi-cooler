@@ -163,27 +163,45 @@ animasyon seçer). Efektler cihaza bir **program** olarak yüklenir
 (`0x41` init → 19 × `0x47` kare → `0x43` commit); firmware kareler arasında
 kendisi interpolasyon yapar.
 
-| Efekt | Davranış |
-| --- | --- |
-| Static | Tek renk, sabit |
-| Multi color | Kırmızı / yeşil / mavi üç renk sabit |
-| Rotation | Seçili renkte dönen tek nokta |
-| Flowing | Altı renkli gökkuşağı akışı |
-| Breathing | Seçili renkte nefes alma |
+| Efekt | Renk | Davranış |
+| --- | --- | --- |
+| Static | 1 | Tek renk, sabit |
+| Multi color | 3 | Üç renk şerit boyunca tekrarlanır, sabit |
+| Rotation | 1–6 | Renkler şerit boyunca döner |
+| Flowing | – | Altı renkli gökkuşağı akışı (sabit palet) |
+| Breathing | 1–5 | Renkler arasında sırayla nefes alır |
+
+Efektler tek bir renk listesini paylaşır (varsayılan mavi, kırmızı, yeşil).
+Işığın renk seçicisi ilk rengi değiştirir; listenin
+tamamı `flydigi_cooler.set_light_colors` aksiyonuyla ayarlanır. Her efekt
+desteklediği kadar renk kullanır, eksikleri varsayılanlarla tamamlar. Güncel
+liste ışığın `colors` özniteliğinde görünür.
+
+```yaml
+action: flydigi_cooler.set_light_colors
+target:
+  entity_id: light.flydigi_bs3_pro_light
+data:
+  colors:
+    - [0, 0, 255]
+    - [255, 0, 0]
+    - [0, 255, 0]
+```
 
 Parlaklık firmware tarafından uygulanır (0–100). `0x43` commit her efekt
-değişiminde bir flaş sayfası siler. Efekt, renk ve parlaklık `.storage`'da
-saklanır. Yüklenen program RAM'de durur ve cihaz PC ile birlikte güç kaybedince
+değişiminde bir flaş sayfası siler. Efekt, renkler ve parlaklık `.storage`'da
+saklanır (varsayılan parlaklık 50). Yüklenen program RAM'de durur ve cihaz PC ile birlikte güç kaybedince
 sıfırlanır; ışık yeniden açılınca hatırlanan efekt tekrar yüklenir. Işık zaten
 yanıyorsa ve parametreler değişmediyse komut gönderilmez. Işık fandan
 bağımsızdır: fanı açmak veya kapatmak ışığı değiştirmez.
 
 > Işık modu hafızası entegrasyonun kendi `.storage` dosyasındadır; HA veya
 > entegrasyon yeniden kurulsa da korunur, ancak entegrasyonu tamamen kaldırıp
-> yeniden eklersen varsayılan (Static/beyaz) ile başlar.
+> yeniden eklersen varsayılan (Static/mavi, parlaklık 50) ile başlar.
 
 Animasyon hızı `number.flydigi_bs3_pro_light_speed` ile 0–100 arasında
-ayarlanır (100 = hızlı, 0 = yavaş; resmî uygulamadaki "Speed" ile aynı ölçek).
+ayarlanır (100 = hızlı, 0 = yavaş; varsayılan 60).
+Rotation, Flowing ve Breathing'e uygulanır; sabit efektler animasyon yapmaz.
 Hız değişince efekt yeni hızla yeniden yüklenir.
 
 ### Cihaz ayarları (flash)
@@ -225,7 +243,8 @@ Ayrıca cihaz, bazı açılışlarda **rastgele statik BLE adresi** üretir
 (gözlemlediğimiz: `DD:7F:64:2D:BA:83` → `DE:7F:64:2D:BA:83`). Bu yüzden
 entegrasyon sabit adrese güvenmez: önce reklamda görülen isim (`FlyDigi BS3PRO`)
 veya `FFF0` servisiyle cihazı bulur, bulamazsa kayıtlı adresi dener. Adres
-değişse bile ek bir işlem gerekmez.
+değişse bile normalde ek bir işlem gerekmez (soğutucu Bluetooth eşleştirmesi
+istiyorsa aşağıya bakın).
 
 Başarılı her bağlantıda adres `.storage/flydigi_cooler.<entry_id>` dosyasına
 yazılır ve HA yeniden başladığında **ilk olarak o adres** denenir. Bu önemli:
@@ -233,6 +252,55 @@ cihaz normal çalışırken reklamında isim/`FFF0` yayınlamıyor (loglarda
 `advertised=[]`), isim yalnızca eşleştirme modunda görünüyor. Adres yine de
 değişirse güç düğmesine 10 s basıp eşleştirme moduna alın; HA cihazı isimle
 bulup yeni adresi kendisi kaydeder.
+
+10 saniyelik basıştan sonra soğutucu **kapalı** kalabilir: Bluetooth çalışmaya
+ve komutları kabul etmeye devam eder ama fan ve LED'ler hiçbir şey yapmaz
+(ölçülen RPM 0 kalır). Güç düğmesine kısa basmak cihazı yeniden açar.
+
+### Soğutucu Bluetooth eşleştirmesi isterse
+
+Soğutucu başka bir merkezle (ör. resmî Windows uygulaması) eşleştikten sonra her
+bağlantıda Bluetooth eşleştirmesi (bonding) istemeye başlayabilir. Windows bunu
+sessizce kabul eder; Home Assistant'ta bu istek için bir eşleştirme aracısı
+(agent) yoktur, BlueZ isteği reddeder ve soğutucu bağlantıyı koparır. Belirtiler:
+
+- Cihaz eklenirken "bağlanılamadı" hatası alınır ya da bağlanır ama hiçbir şey
+  okunmaz.
+- Entegrasyon logunda `failed to discover services, device disconnected`,
+  `Characteristic 0000fff1-… was not found` veya `Authentication Failed` görünür.
+- Sunucu logunda (`ha host logs`)
+  `bluetoothd: new_auth() No agent available for request type 2` görünür.
+
+Soğutucuyu Home Assistant sunucusunda (SSH eklentisi) `bluetoothctl` ile, isteği
+otomatik kabul eden bir aracıyla bir kez eşleştirin:
+
+1. PC'de resmî uygulamayı kapatın ve arka plan servisini durdurun (Windows'ta
+   `Flydigi Space Station Service`); başka hiçbir şey bağlı olmasın.
+2. Soğutucuyu eşleştirme moduna alın (güç düğmesine 10 s basılı tutun) ve
+   Bluetooth reklam izleyicisinde güncel adresini not edin.
+3. `XX:XX:XX:XX:XX:XX` yerine o adresi yazarak çalıştırın:
+
+   ```bash
+   bluetoothctl
+   pairable on
+   agent NoInputNoOutput
+   default-agent
+   scan le
+   pair XX:XX:XX:XX:XX:XX
+   trust XX:XX:XX:XX:XX:XX
+   scan off
+   pairable off
+   quit
+   ```
+
+   Eşleştirmeyi soğutucu kendisi başlatırsa `pair` komutu `AlreadyExists`
+   döndürür; bu normaldir. Ardından `info XX:XX:XX:XX:XX:XX` çıktısında
+   `Paired: yes`, `Bonded: yes` ve `FFF0` servisi görünmelidir.
+4. Soğutucuyu açmak için güç düğmesine kısa basın, sonra entegrasyonu aynı
+   adresle ekleyin (listede yoksa adresi elle yazın).
+
+Eşleşme o adres için saklanır. Soğutucu daha sonra yeni bir adresle gelirse
+eşleştirmeyi yeni adres için tekrarlayın.
 
 ## Cihazın 2 dakikalık zaman aşımı
 

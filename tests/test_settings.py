@@ -120,6 +120,9 @@ def _load():
         async def async_send(self, frame, expect=()):
             self.sent.append(bytes(frame))
 
+        async def async_send_sequence(self, frames):
+            self.sent.extend(bytes(frame) for frame, _expect in frames)
+
         async def async_update(self):
             return self.state
 
@@ -294,6 +297,48 @@ async def test_unknown_settings_are_optimistic() -> None:
     assert coordinator.power_on_start_known is False
     assert coordinator.smart_stop is None
     assert coordinator.client.sent == [] or not _flash_frames(coordinator.client.sent)
+
+async def test_old_single_colour_store_is_migrated() -> None:
+    """A store from before colour lists keeps its colour as colour 1."""
+    hass = FakeHass()
+    coordinator = await _restart(
+        hass, {"last_on": {"mode": "gear", "gear": 1}, "light_color": [255, 255, 255]}
+    )
+    assert coordinator.light_colors == [(255, 255, 255), (255, 0, 0), (0, 255, 0)]
+    assert coordinator.light_color == (255, 255, 255)
+
+
+async def test_set_light_colors_while_off_only_stores() -> None:
+    hass = FakeHass()
+    coordinator = await _restart(
+        hass, {"last_on": {"mode": "gear", "gear": 1}, "light_on": False}
+    )
+    coordinator.client.sent.clear()
+    await coordinator.async_set_light_colors([(1, 2, 3), (4, 5, 6)])
+    await hass.settle()
+    assert coordinator.client.sent == [], "an off light must not be uploaded"
+    assert coordinator.light_colors == [(1, 2, 3), (4, 5, 6)]
+    assert hass.storage[STORE_KEY]["light_colors"] == [[1, 2, 3], [4, 5, 6]]
+
+
+async def test_set_light_colors_while_on_uploads_once() -> None:
+    hass = FakeHass()
+    coordinator = await _restart(
+        hass,
+        {
+            "last_on": {"mode": "gear", "gear": 1},
+            "light_on": True,
+            "light_effect": "Rotation",
+        },
+    )
+    coordinator.client.sent.clear()
+    await coordinator.async_set_light_colors([(1, 2, 3)])
+    await hass.settle()
+    commits = [frame for frame in coordinator.client.sent if frame[2] == 0x43]
+    assert len(commits) == 1
+    coordinator.client.sent.clear()
+    await coordinator.async_set_light_colors([(1, 2, 3)])
+    assert coordinator.client.sent == [], "same colours must not re-upload"
 
 
 if __name__ == "__main__":

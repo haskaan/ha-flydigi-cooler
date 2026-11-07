@@ -10,6 +10,10 @@ selects an animation). Effects are uploaded as a program (see
 
 from __future__ import annotations
 
+from typing import Any
+
+import voluptuous as vol
+
 from homeassistant.components.light import (
     ColorMode,
     LightEntity,
@@ -17,13 +21,27 @@ from homeassistant.components.light import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.device_registry import CONNECTION_BLUETOOTH
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_ADDRESS, DOMAIN, MANUFACTURER
 from .coordinator import FlydigiCoordinator
-from .light_program import EFFECTS
+from .light_program import EFFECTS, MAX_COLORS
+
+SERVICE_SET_LIGHT_COLORS = "set_light_colors"
+ATTR_COLORS = "colors"
+
+_RGB = vol.All(
+    vol.ExactSequence((cv.byte, cv.byte, cv.byte)),
+    vol.Coerce(tuple),
+)
+SET_LIGHT_COLORS_SCHEMA = {
+    vol.Required(ATTR_COLORS): vol.All(
+        cv.ensure_list, [_RGB], vol.Length(min=1, max=MAX_COLORS)
+    ),
+}
 
 
 async def async_setup_entry(
@@ -33,6 +51,13 @@ async def async_setup_entry(
 ) -> None:
     coordinator: FlydigiCoordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities([FlydigiLight(coordinator, entry)])
+
+    platform = entity_platform.async_get_current_platform()
+    platform.async_register_entity_service(
+        SERVICE_SET_LIGHT_COLORS,
+        SET_LIGHT_COLORS_SCHEMA,
+        "async_set_colors",
+    )
 
 
 class FlydigiLight(CoordinatorEntity[FlydigiCoordinator], LightEntity):
@@ -81,6 +106,11 @@ class FlydigiLight(CoordinatorEntity[FlydigiCoordinator], LightEntity):
         return self.coordinator.light_color
 
     @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """The full colour list (the colour picker edits the first one)."""
+        return {ATTR_COLORS: [list(color) for color in self.coordinator.light_colors]}
+
+    @property
     def effect(self) -> str | None:
         return self.coordinator.light_effect if self.is_on else None
 
@@ -102,3 +132,9 @@ class FlydigiLight(CoordinatorEntity[FlydigiCoordinator], LightEntity):
 
     async def async_turn_off(self, **kwargs) -> None:
         await self.coordinator.async_set_light(False)
+
+    async def async_set_colors(self, colors: list[tuple[int, int, int]]) -> None:
+        """Handle ``flydigi_cooler.set_light_colors``."""
+        await self.coordinator.async_set_light_colors(
+            [tuple(int(c) for c in color) for color in colors]
+        )
