@@ -181,10 +181,10 @@ interpolates between frames.
 
 Brightness is applied by the firmware (0–100). The `0x43` commit erases one
 flash page on every effect change. Effect, colour and brightness are stored in
-`.storage`. **When the fan turns on, the light always turns on** and the
-remembered effect is re-uploaded (the program lives in RAM and is lost when the
-device loses power with the PC). If the light is already on and nothing changed,
-no command is sent. **When the fan turns off, the light turns off too.**
+`.storage`. The uploaded program lives in RAM and is lost when the device loses
+power with the PC; turning the light on again re-uploads the remembered effect.
+If the light is already on and nothing changed, no command is sent. The light is
+independent of the fan: turning the fan on or off does not change it.
 
 Animation speed is set with `number.<device>_light_speed` (0–100; 100 = fast,
 0 = slow, the same scale as "Speed" in the official app). Changing the speed

@@ -173,10 +173,10 @@ kendisi interpolasyon yapar.
 
 Parlaklık firmware tarafından uygulanır (0–100). `0x43` commit her efekt
 değişiminde bir flaş sayfası siler. Efekt, renk ve parlaklık `.storage`'da
-saklanır; **fan açılınca ışık her zaman açılır** ve hatırlanan efekt yeniden
-yüklenir (cihaz PC ile birlikte güç kaybedince RAM'deki program sıfırlanır).
-Işık zaten yanıyorsa ve parametreler değişmediyse komut gönderilmez.
-**Fan kapanınca ışık da kapanır.**
+saklanır. Yüklenen program RAM'de durur ve cihaz PC ile birlikte güç kaybedince
+sıfırlanır; ışık yeniden açılınca hatırlanan efekt tekrar yüklenir. Işık zaten
+yanıyorsa ve parametreler değişmediyse komut gönderilmez. Işık fandan
+bağımsızdır: fanı açmak veya kapatmak ışığı değiştirmez.
 
 > Işık modu hafızası entegrasyonun kendi `.storage` dosyasındadır; HA veya
 > entegrasyon yeniden kurulsa da korunur, ancak entegrasyonu tamamen kaldırıp
