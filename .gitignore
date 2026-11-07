@@ -8,3 +8,7 @@ venv/
 *.log
 .DS_Store
 Thumbs.db
+
+# Claude Code: personal, machine-local files (shared instructions are committed)
+.claude/settings.local.json
+CLAUDE.local.md
